@@ -4,43 +4,52 @@ const async = require('async');
 
 const processExcel = async (req, res) => {
     try {
-        // Ensure the file is provided
         if (!req.file) {
             return res.status(400).json({ message: 'No file uploaded.' });
         }
 
-        // Parse Excel file from the buffer
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const records = XLSX.utils.sheet_to_json(sheet);
+        const rows = XLSX.utils.sheet_to_json(sheet);
 
-        const results = { success: 0, skipped: 0 };
+        const stats = { added: 0, skipped: 0 };
 
-        // Process records using async.eachSeries
-        await async.eachSeries(records, async (record) => {
+        await async.eachSeries(rows, async (record) => {
             try {
-                const existing = await Candidate.findOne({ email: record.Email });
-
-                if (existing) {
-                    results.skipped++;
-                    return; // Skip duplicate records
+                if (!record.Email || !record['Name of the Candidate'] || !record['Mobile No.']) {
+                    stats.skipped++;
+                    console.warn(`Skipping record due to missing required fields: ${JSON.stringify(record)}`);
+                    return;
                 }
 
-                // Store all properties dynamically
-                const candidateData = {};
-                for (const [key, value] of Object.entries(record)) {
-                    candidateData[key] = typeof value === 'string' ? value.trim() : value;
+                const exists = await Candidate.findOne({ email: record.Email.toLowerCase() });
+                if (exists) {
+                    stats.skipped++;
+                    return;
                 }
+
+                const candidateData = {
+                    name: record['Name of the Candidate'].trim(),
+                    email: record.Email.toLowerCase().trim(),
+                    mobileNo: record['Mobile No.'].toString().trim(),
+                    dob: record['Date of Birth'],
+                    workExperience: record['Work Experience'],
+                    resumeTitle: record['Resume Title'],
+                    currentLocation: record['Current Location'],
+                    postalAddress: record['Postal Address'],
+                    currentEmployer: record['Current Employer'],
+                    currentDesignation: record['Current Designation']
+                };
 
                 await Candidate.create(candidateData);
-                results.success++;
+                stats.added++;
             } catch (error) {
                 console.error(`Error processing record: ${JSON.stringify(record)}`, error);
-                throw error;
+                stats.skipped++;
             }
         });
 
-        res.json({ message: 'File processed successfully', results });
+        res.json({ message: 'File succesully uploaded', stats });
     } catch (err) {
         res.status(500).json({ error: 'Failed to process file', details: err.message });
     }
