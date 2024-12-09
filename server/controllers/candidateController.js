@@ -1,5 +1,6 @@
 const XLSX = require('xlsx');
 const Candidate = require('../models/candidateModel');
+const async = require('async');
 
 const processExcel = async (req, res) => {
     try {
@@ -15,29 +16,34 @@ const processExcel = async (req, res) => {
 
         const results = { success: 0, skipped: 0 };
 
-        // Loop through each record and insert into database
-        for (const record of records) {
-            const existing = await Candidate.findOne({ email: record.Email });
+        // Process records using async.eachSeries
+        await async.eachSeries(records, async (record) => {
+            try {
+                const existing = await Candidate.findOne({ email: record.Email });
 
-            if (existing) {
-                results.skipped++;
-                continue; // Skip duplicate records
+                if (existing) {
+                    results.skipped++;
+                    return; // Skip duplicate records
+                }
+
+                await Candidate.create({
+                    name: record['Name of the Candidate'],
+                    email: record.Email,
+                    mobileNo: record['Mobile No.'],
+                    dob: record['Date of Birth'],
+                    workExperience: record['Work Experience'],
+                    resumeTitle: record['Resume Title'],
+                    currentLocation: record['Current Location'],
+                    postalAddress: record['Postal Address'],
+                    currentEmployer: record['Current Employer'],
+                    currentDesignation: record['Current Designation'],
+                });
+                results.success++;
+            } catch (error) {
+                console.error(`Error processing record: ${JSON.stringify(record)}`, error);
+                throw error;
             }
-
-            await Candidate.create({
-                name: record['Name of the Candidate'],
-                email: record.Email,
-                mobileNo: record['Mobile No.'],
-                dob: record['Date of Birth'],
-                workExperience: record['Work Experience'],
-                resumeTitle: record['Resume Title'],
-                currentLocation: record['Current Location'],
-                postalAddress: record['Postal Address'],
-                currentEmployer: record['Current Employer'],
-                currentDesignation: record['Current Designation'],
-            });
-            results.success++;
-        }
+        });
 
         res.json({ message: 'File processed successfully', results });
     } catch (err) {
