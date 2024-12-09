@@ -26,18 +26,13 @@ const processExcel = async (req, res) => {
                     return; // Skip duplicate records
                 }
 
-                await Candidate.create({
-                    name: record['Name of the Candidate'],
-                    email: record.Email,
-                    mobileNo: record['Mobile No.'],
-                    dob: record['Date of Birth'],
-                    workExperience: record['Work Experience'],
-                    resumeTitle: record['Resume Title'],
-                    currentLocation: record['Current Location'],
-                    postalAddress: record['Postal Address'],
-                    currentEmployer: record['Current Employer'],
-                    currentDesignation: record['Current Designation'],
-                });
+                // Store all properties dynamically
+                const candidateData = {};
+                for (const [key, value] of Object.entries(record)) {
+                    candidateData[key] = typeof value === 'string' ? value.trim() : value;
+                }
+
+                await Candidate.create(candidateData);
                 results.success++;
             } catch (error) {
                 console.error(`Error processing record: ${JSON.stringify(record)}`, error);
